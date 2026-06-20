@@ -1,7 +1,7 @@
+import logging
 import json
 import os
-import logging
-from typing import Dict
+from typing import Dict, Optional
 
 import torch
 from torch.utils.data import Dataset
@@ -23,9 +23,13 @@ class LLaVAPretrainDataset(Dataset):
         image_processor: CLIPImageProcessor,
         image_token_id: int,
         max_length: int = 2048,
+        max_samples: Optional[int] = None,
     ):
         with open(data_path, "r", encoding="utf-8") as f:
             self.data = json.load(f)
+
+        if max_samples is not None:
+            self.data = self.data[:max_samples]
 
         self.image_dir = image_dir
         self.tokenizer = tokenizer

@@ -135,12 +135,18 @@ def row_to_record(row: Dict[str, Any], image_name: str) -> Dict[str, Any]:
     }
 
 
+def dataset_split(args: argparse.Namespace) -> str:
+    if args.max_samples is None or args.no_streaming:
+        return args.split
+    return f"{args.split}[:{args.max_samples}]"
+
+
 def iter_rows(args: argparse.Namespace) -> Iterable[Dict[str, Any]]:
     return load_dataset(
         args.dataset_name,
         args.config_name,
-        split=args.split,
-        streaming=not args.no_streaming,
+        split=dataset_split(args),
+        streaming=args.max_samples is None and not args.no_streaming,
     )
 
 
@@ -184,9 +190,6 @@ def main() -> None:
         first = True
 
         for idx, row in enumerate(tqdm(rows, total=total, desc="Exporting")):
-            if args.max_samples is not None and idx >= args.max_samples:
-                break
-
             try:
                 row_id = safe_filename(row.get("id"), f"sample_{idx:09d}")
                 image_name = f"{idx:09d}_{row_id}.{extension}"

@@ -67,6 +67,11 @@ class VLMTrainer:
             max_length=self.config.get("data", {}).get("max_length", 2048),
         )
 
+        dataloader_kwargs = {}
+        if self.dataloader_num_workers > 0:
+            dataloader_kwargs["persistent_workers"] = True
+            dataloader_kwargs["prefetch_factor"] = 4
+
         dataloader = DataLoader(
             self.train_dataset,
             batch_size=self.per_device_batch_size,
@@ -75,10 +80,16 @@ class VLMTrainer:
             pin_memory=True,
             collate_fn=collator,
             drop_last=True,
+            **dataloader_kwargs,
         )
 
         num_update_steps_per_epoch = len(dataloader) // self.gradient_accumulation_steps
         num_training_steps = num_update_steps_per_epoch * self.num_epochs
+        if num_training_steps < 1:
+            raise ValueError(
+                "Training has zero update steps. Increase data size or reduce "
+                "per_device_batch_size/gradient_accumulation_steps."
+            )
         num_warmup_steps = int(num_training_steps * self.warmup_ratio)
 
         scheduler = build_cosine_warmup_scheduler(
@@ -100,6 +111,7 @@ class VLMTrainer:
         global_step = 0
         running_loss = 0.0
         start_time = time.time()
+        checked_first_grad = False
 
         self.model.train()
         # Re-freeze vision encoder and LLM (accelerator.prepare may reset eval mode)
@@ -123,6 +135,13 @@ class VLMTrainer:
                     self.accelerator.backward(loss)
 
                     if self.accelerator.sync_gradients:
+                        if not checked_first_grad:
+                            for p in unwrapped.connector.parameters():
+                                assert (
+                                    p.grad is not None or not p.requires_grad
+                                ), "Connector gradient is None after first step"
+                            checked_first_grad = True
+
                         self.accelerator.clip_grad_norm_(
                             unwrapped.connector.parameters(),
                             self.max_grad_norm,
@@ -136,12 +155,6 @@ class VLMTrainer:
 
                 if self.accelerator.sync_gradients:
                     global_step += 1
-
-                    if global_step == 1:
-                        for p in unwrapped.connector.parameters():
-                            assert (
-                                p.grad is not None or not p.requires_grad
-                            ), "Connector gradient is None after first step"
 
                     if global_step % self.logging_steps == 0:
                         avg_loss = running_loss / (

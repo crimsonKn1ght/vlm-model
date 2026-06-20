@@ -92,6 +92,53 @@ accelerate launch train.py --config configs/pretrain_stage1.yaml
 
 Training logs appear in stdout. Checkpoints are saved every 500 steps to `./checkpoints/pretrain-stage1/`.
 
+### RTX 6000 Ada Pod Workflow
+
+For a CUDA pod, install dependencies and verify GPU visibility:
+
+```bash
+cd /workspace/vlm
+
+python -m pip install -r requirements.txt
+python -c "import torch; print(torch.__version__); assert torch.cuda.is_available(); print(torch.cuda.get_device_name(0))"
+```
+
+Run a fast batched smoke train and write batched qualitative generations:
+
+```bash
+python train.py --config configs/pod_smoke.yaml
+
+python inference.py \
+  --config configs/pod_smoke.yaml \
+  --checkpoint checkpoints/pod-smoke \
+  --data datasets/llava_recap_558k/train.json \
+  --image_dir datasets/llava_recap_558k/images \
+  --batch_size 16 \
+  --max_samples 16 \
+  --max_new_tokens 80 \
+  --temperature 0 \
+  --output_jsonl outputs/pod-smoke-eval.jsonl
+```
+
+Run the full one-epoch connector alignment pass and sample batched evaluation:
+
+```bash
+python train.py --config configs/pod_rtx6000ada.yaml
+
+python inference.py \
+  --config configs/pod_rtx6000ada.yaml \
+  --checkpoint checkpoints/stage1-rtx6000ada \
+  --data datasets/llava_recap_558k/train.json \
+  --image_dir datasets/llava_recap_558k/images \
+  --batch_size 16 \
+  --max_samples 32 \
+  --max_new_tokens 80 \
+  --temperature 0 \
+  --output_jsonl outputs/stage1-sample-eval.jsonl
+```
+
+`--checkpoint` can point either to a specific `checkpoint-N` directory or to its parent output directory; the latest checkpoint is resolved automatically.
+
 ### 4. Inference
 
 ```bash

@@ -62,6 +62,7 @@ def main():
         image_processor=model.image_processor,
         image_token_id=model.image_token_id,
         max_length=data_cfg.get("max_length", 2048),
+        max_samples=data_cfg.get("max_train_samples"),
     )
     logger.info(f"Dataset size: {len(dataset)} samples")
 

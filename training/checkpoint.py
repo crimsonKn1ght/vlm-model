@@ -7,6 +7,33 @@ import torch.nn as nn
 from safetensors.torch import save_file, load_file
 
 
+def resolve_checkpoint_path(checkpoint_path: str) -> str:
+    if os.path.isfile(os.path.join(checkpoint_path, "connector.safetensors")):
+        return checkpoint_path
+
+    if not os.path.isdir(checkpoint_path):
+        raise FileNotFoundError(f"Checkpoint path does not exist: {checkpoint_path}")
+
+    checkpoints = []
+    for name in os.listdir(checkpoint_path):
+        path = os.path.join(checkpoint_path, name)
+        if not os.path.isdir(path) or not name.startswith("checkpoint-"):
+            continue
+        try:
+            step = int(name.split("-", 1)[1])
+        except ValueError:
+            continue
+        if os.path.isfile(os.path.join(path, "connector.safetensors")):
+            checkpoints.append((step, path))
+
+    if not checkpoints:
+        raise FileNotFoundError(
+            f"No connector checkpoints found under {checkpoint_path}"
+        )
+
+    return max(checkpoints, key=lambda item: item[0])[1]
+
+
 def save_connector_checkpoint(
     connector: nn.Module,
     optimizer: torch.optim.Optimizer,
@@ -41,6 +68,7 @@ def load_connector_checkpoint(
     optimizer: Optional[torch.optim.Optimizer] = None,
     scheduler: Optional[Any] = None,
 ) -> int:
+    checkpoint_path = resolve_checkpoint_path(checkpoint_path)
     connector_path = os.path.join(checkpoint_path, "connector.safetensors")
     state_dict = load_file(connector_path)
     connector.load_state_dict(state_dict)

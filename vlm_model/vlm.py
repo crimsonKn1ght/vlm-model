@@ -74,7 +74,7 @@ class VLMForCausalLM(nn.Module):
                 labels,
             )
 
-        image_embeds = self.encode_images(images)
+        image_embeds = self.encode_images(images).to(dtype=embed_tokens.weight.dtype)
 
         new_embeds_list = []
         new_labels_list = []
