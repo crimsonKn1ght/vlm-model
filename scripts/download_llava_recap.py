@@ -47,6 +47,12 @@ def parse_args() -> argparse.Namespace:
         help="Image format to save locally.",
     )
     parser.add_argument(
+        "--jpeg-quality",
+        type=int,
+        default=95,
+        help="JPEG quality for saved images. Lower values reduce disk usage.",
+    )
+    parser.add_argument(
         "--no-streaming",
         action="store_true",
         help="Download through the normal datasets cache instead of streaming rows.",
@@ -74,7 +80,9 @@ def image_extension(image_format: str) -> str:
     return "jpg" if image_format == "jpg" else "png"
 
 
-def save_image(image_value: Any, output_path: Path, image_format: str) -> None:
+def save_image(
+    image_value: Any, output_path: Path, image_format: str, jpeg_quality: int
+) -> None:
     if output_path.exists():
         return
 
@@ -96,7 +104,7 @@ def save_image(image_value: Any, output_path: Path, image_format: str) -> None:
     output_path.parent.mkdir(parents=True, exist_ok=True)
     if image_format == "jpg":
         image = image.convert("RGB")
-        image.save(output_path, format="JPEG", quality=95)
+        image.save(output_path, format="JPEG", quality=jpeg_quality)
     else:
         image.save(output_path, format="PNG")
 
@@ -136,9 +144,9 @@ def row_to_record(row: Dict[str, Any], image_name: str) -> Dict[str, Any]:
 
 
 def dataset_split(args: argparse.Namespace) -> str:
-    if args.max_samples is None or args.no_streaming:
-        return args.split
-    return f"{args.split}[:{args.max_samples}]"
+    if args.max_samples is not None and args.no_streaming:
+        return f"{args.split}[:{args.max_samples}]"
+    return args.split
 
 
 def iter_rows(args: argparse.Namespace) -> Iterable[Dict[str, Any]]:
@@ -146,7 +154,7 @@ def iter_rows(args: argparse.Namespace) -> Iterable[Dict[str, Any]]:
         args.dataset_name,
         args.config_name,
         split=dataset_split(args),
-        streaming=args.max_samples is None and not args.no_streaming,
+        streaming=not args.no_streaming,
     )
 
 
@@ -190,12 +198,17 @@ def main() -> None:
         first = True
 
         for idx, row in enumerate(tqdm(rows, total=total, desc="Exporting")):
+            if args.max_samples is not None and idx >= args.max_samples:
+                break
+
             try:
                 row_id = safe_filename(row.get("id"), f"sample_{idx:09d}")
                 image_name = f"{idx:09d}_{row_id}.{extension}"
                 image_path = image_dir / image_name
 
-                save_image(row["image"], image_path, args.image_format)
+                save_image(
+                    row["image"], image_path, args.image_format, args.jpeg_quality
+                )
                 record = row_to_record(row, image_name)
 
                 if not first:

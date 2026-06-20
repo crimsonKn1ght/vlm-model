@@ -103,6 +103,31 @@ python -m pip install -r requirements.txt
 python -c "import torch; print(torch.__version__); assert torch.cuda.is_available(); print(torch.cuda.get_device_name(0))"
 ```
 
+For basic connector training without the 558K image export, download a compact subset and train the lighter config:
+
+```bash
+python scripts/download_llava_recap.py \
+  --max-samples 2048 \
+  --output-dir datasets/llava_recap_small \
+  --jpeg-quality 85 \
+  --overwrite
+
+python train.py --config configs/basic_connector_small.yaml
+
+python inference.py \
+  --config configs/basic_connector_small.yaml \
+  --checkpoint checkpoints/basic-connector-small \
+  --data datasets/llava_recap_small/train.json \
+  --image_dir datasets/llava_recap_small/images \
+  --batch_size 16 \
+  --max_samples 32 \
+  --max_new_tokens 80 \
+  --temperature 0 \
+  --output_jsonl outputs/basic-connector-small-eval.jsonl
+```
+
+`configs/basic_connector_small.yaml` uses `openai/clip-vit-base-patch32` and `Qwen/Qwen2.5-0.5B-Instruct`, so it is much lighter than the default CLIP-L/Qwen-1.5B setup. Increase or decrease `--max-samples` for the disk/runtime budget you actually want.
+
 Run a fast batched smoke train and write batched qualitative generations:
 
 ```bash

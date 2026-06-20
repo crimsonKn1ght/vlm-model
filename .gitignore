@@ -3,4 +3,5 @@
 __pycache__/
 checkpoints/
 outputs/
+datasets/llava_recap_small/
 datasets/llava_recap_558k/
