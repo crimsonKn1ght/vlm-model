@@ -1,13 +1,18 @@
 # Vision-Language Model (VLM) - Stage 1 Feature Alignment
 
-A minimal, efficient implementation of a Vision-Language Model following the LLaVA architecture. This project trains only a lightweight MLP connector to align frozen CLIP vision features with a frozen LLM, achieving effective multimodal understanding with minimal computational cost.
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg?style=flat)](LICENSE)
+[![Python](https://img.shields.io/badge/Python-3.10%2B-blue.svg?style=flat)](requirements.txt)
+[![PyTorch](https://img.shields.io/badge/PyTorch-2.1%2B-ee4c2c.svg?style=flat)](requirements.txt)
+[![HF Model](https://img.shields.io/badge/%F0%9F%A4%97%20Hugging%20Face-vlm--basic--connector--full-yellow)](https://huggingface.co/grKnight/vlm-basic-connector-full)
+
+A minimal implementation of a Vision-Language Model following the LLaVA architecture. Only a lightweight MLP connector is trained, aligning frozen CLIP vision features with a frozen LLM so that multimodal understanding costs a few million parameters rather than a few billion.
 
 ## Overview
 
 This implementation bridges a frozen CLIP vision encoder (`openai/clip-vit-large-patch14`) and a frozen instruction-tuned LLM (`Qwen/Qwen2.5-1.5B-Instruct`) using a simple 2-layer MLP connector. Only the connector (~3.9M parameters) is trained on image-caption pairs; both the vision encoder and LLM remain frozen throughout training.
 
 **Key Design Principles:**
-- **Simplicity**: No Q-Former, no cross-attention — just a linear projection with GELU
+- **Simplicity**: No Q-Former, no cross-attention: just a linear projection with GELU
 - **Efficiency**: Frozen models save memory; only train the connector
 - **Proven approach**: Follows LLaVA Stage 1 alignment, a well-validated recipe
 
@@ -16,13 +21,13 @@ This implementation bridges a frozen CLIP vision encoder (`openai/clip-vit-large
 ```
 Image (3, 224, 224)
     ↓
-[CLIP ViT-L/14 — Frozen] → 256 patch tokens (B, 256, 1024)
+[CLIP ViT-L/14, frozen] → 256 patch tokens (B, 256, 1024)
     ↓
-[MLP Connector — Trainable] → (B, 256, 1536)
+[MLP Connector, trainable] → (B, 256, 1536)
     ↓ (concatenated with)
 Text Embeddings (B, T, 1536) from LLM embedding table
     ↓
-[Qwen2.5-1.5B-Instruct — Frozen] → Loss
+[Qwen2.5-1.5B-Instruct, frozen] → Loss
 ```
 
 **Training objective**: Next-token prediction on image-text pairs. Visual tokens are masked out of the loss; only the caption tokens contribute to gradient updates on the connector.
@@ -31,7 +36,7 @@ Text Embeddings (B, T, 1536) from LLM embedding table
 
 ```bash
 # Clone or navigate to the project directory
-cd vlm
+cd vlm-model
 
 # Install dependencies
 pip install -r requirements.txt
@@ -97,7 +102,7 @@ Training logs appear in stdout. Checkpoints are saved every 500 steps to `./chec
 For a CUDA pod, install dependencies and verify GPU visibility:
 
 ```bash
-cd /workspace/vlm
+cd /workspace/vlm-model
 
 python -m pip install -r requirements.txt
 python -c "import torch; print(torch.__version__); assert torch.cuda.is_available(); print(torch.cuda.get_device_name(0))"
@@ -177,12 +182,19 @@ python inference.py \
 ## Project Structure
 
 ```
-vlm/
+vlm-model/
 ├── train.py                        # Training entry point
 ├── inference.py                    # Inference script
 ├── requirements.txt                # Dependencies
-├── configs/
-│   └── pretrain_stage1.yaml        # Hyperparameter config
+├── configs/                        # One YAML per training setup
+│   ├── pretrain_stage1.yaml        # Default CLIP-L/Qwen-1.5B run
+│   ├── basic_connector_small.yaml  # Light CLIP-B/32 + Qwen-0.5B subset run
+│   ├── basic_connector_100k.yaml
+│   ├── basic_connector_full.yaml
+│   ├── pod_smoke.yaml              # Fast smoke train
+│   └── pod_rtx6000ada.yaml         # Full one-epoch pod run
+├── scripts/
+│   └── download_llava_recap.py     # Fetches a LLaVA-ReCap subset
 ├── vlm_model/
 │   ├── utils.py                    # Constants, helper functions
 │   ├── connector.py                # MLP projection layer (trainable)
@@ -224,10 +236,10 @@ Expected training time on a single RTX 3060 (12GB) for 558K samples:
 ## What Gets Trained
 
 Only the connector's weights are updated:
-- `model.connector.mlp[0].weight` — (1536, 1024)
-- `model.connector.mlp[0].bias` — (1536,)
-- `model.connector.mlp[2].weight` — (1536, 1536)
-- `model.connector.mlp[2].bias` — (1536,)
+- `model.connector.mlp[0].weight`: (1536, 1024)
+- `model.connector.mlp[0].bias`: (1536,)
+- `model.connector.mlp[2].weight`: (1536, 1536)
+- `model.connector.mlp[2].bias`: (1536,)
 
 Both the vision encoder (`vision_encoder.model`) and LLM (`language_model.model`) are frozen via `requires_grad=False`.
 
@@ -255,11 +267,11 @@ The `<image>` token in the prompt is automatically replaced with visual embeddin
 
 This implementation covers **Stage 1: Feature Alignment**. Future extensions might include:
 
-1. **Stage 2: Full Model Tuning** — Unfreeze LLM layers and fine-tune on instruction-following data
-2. **Cross-Attention Connector** — Replace MLP with a learned cross-attention mechanism for better spatial reasoning
-3. **Higher-Resolution Images** — Support variable image resolutions and dynamic patching
-4. **Multi-Image Support** — Handle multiple images per prompt
-5. **Evaluation** — Add benchmarks (VQA, captioning, visual reasoning tasks)
+1. **Stage 2: Full Model Tuning**. Unfreeze LLM layers and fine-tune on instruction-following data
+2. **Cross-Attention Connector**. Replace MLP with a learned cross-attention mechanism for better spatial reasoning
+3. **Higher-Resolution Images**. Support variable image resolutions and dynamic patching
+4. **Multi-Image Support**. Handle multiple images per prompt
+5. **Evaluation**. Add benchmarks (VQA, captioning, visual reasoning tasks)
 
 ## Troubleshooting
 
@@ -280,12 +292,12 @@ This implementation covers **Stage 1: Feature Alignment**. Future extensions mig
 ## References
 
 - **LLaVA**: [Visual Instruction Tuning](https://arxiv.org/abs/2304.08485)
-- **CLIP**: [Learning Transferable Models for Compositional Vision](https://arxiv.org/abs/2103.14030)
+- **CLIP**: [Learning Transferable Visual Models From Natural Language Supervision](https://arxiv.org/abs/2103.00020)
 - **Qwen**: [Qwen2.5 Technical Report](https://qwenlm.github.io/blog/qwen2.5/)
 
 ## License
 
-MIT License. See LICENSE file (if present) for details.
+MIT License. See [LICENSE](LICENSE) for details.
 
 ## Contributing
 
