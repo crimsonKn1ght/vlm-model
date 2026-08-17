@@ -3,6 +3,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg?style=flat)](LICENSE)
 [![Python](https://img.shields.io/badge/Python-3.10%2B-blue.svg?style=flat)](requirements.txt)
 [![PyTorch](https://img.shields.io/badge/PyTorch-2.1%2B-ee4c2c.svg?style=flat)](requirements.txt)
+[![HF Model](https://img.shields.io/badge/%F0%9F%A4%97%20Hugging%20Face-vlm--basic--connector--full-yellow)](https://huggingface.co/grKnight/vlm-basic-connector-full)
 
 A minimal implementation of a Vision-Language Model following the LLaVA architecture. Only a lightweight MLP connector is trained, aligning frozen CLIP vision features with a frozen LLM so that multimodal understanding costs a few million parameters rather than a few billion.
 
